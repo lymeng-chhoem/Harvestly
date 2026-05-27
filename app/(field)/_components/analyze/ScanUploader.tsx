@@ -29,11 +29,12 @@ const text = {
   next: { km: "ជំហានបន្ទាប់", en: "Next actions" },
   saveError: {
     km: "លទ្ធផលបានបង្ហាញ ប៉ុន្តែមិនអាចរក្សាទុកក្នុងប្រវត្តិនៅលើឧបករណ៍នេះបានទេ។",
-    en: "Result shown, but it could not be saved to history on this device.",
+    en: "Result shown, but it could not be saved to your history.",
   },
   guestAllowance: { km: "អ្នកអាចពិនិត្យឥតគិតថ្លៃបាន ១ ដងដោយមិនចាំបាច់ចូលគណនី។", en: "You have 1 free scan without an account." },
   registeredAllowance: { km: "ការពិនិត្យដែលនៅសល់ក្នុងសប្តាហ៍នេះ", en: "Scans remaining this week" },
   loadingAccess: { km: "កំពុងពិនិត្យសិទ្ធិប្រើប្រាស់...", en: "Checking scan access..." },
+  registeredAccessUnavailable: { km: "មិនអាចផ្ទុកចំនួនការពិនិត្យរបស់គណនីបានទេ។", en: "Unable to load your registered scan allowance." },
   join: { km: "បង្កើតគណនី", en: "Sign up" },
   login: { km: "ចូលគណនី", en: "Login" },
   errors: {
@@ -118,9 +119,15 @@ export function ScanUploader({ home = false, className = "" }: { home?: boolean;
         <p>{localize(text.prompt, language)}</p>
       </div>
       <div className="scan-allowance" role="status">
-        {authStatus === "loading" ? localize(text.loadingAccess, language) : authStatus === "authenticated" && allowance
-          ? `${localize(text.registeredAllowance, language)}: ${allowance.remaining}/${allowance.limit}`
-          : localize(text.guestAllowance, language)}
+        {authStatus === "loading"
+          ? localize(text.loadingAccess, language)
+          : authStatus === "authenticated"
+            ? allowance
+              ? `${localize(text.registeredAllowance, language)}: ${allowance.remaining}/${allowance.limit}`
+              : historySaveError
+                ? localize(text.registeredAccessUnavailable, language)
+                : localize(text.loadingAccess, language)
+            : localize(text.guestAllowance, language)}
       </div>
       <input
         ref={galleryInputRef}

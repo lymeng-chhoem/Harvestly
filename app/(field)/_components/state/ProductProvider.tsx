@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   type Language,
   type StoredScanRecord,
@@ -20,12 +21,14 @@ import {
   readAnonymousAllowance,
   spendAnonymousScan,
 } from "@/lib/scan-usage";
+import { profileSetupPath, readAccountProfile } from "@/lib/profile";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type UploadError = "type" | "size" | null;
 export type AnalysisStatus = "idle" | "analyzing" | "result" | "error";
 export type AnalysisError = "configuration" | "network" | "timeout" | "service" | "invalid_response" | "limit" | null;
 export type AuthStatus = "loading" | "guest" | "authenticated";
+export type ProfileStatus = "loading" | "guest" | "incomplete" | "complete";
 
 type ProductContextValue = {
   language: Language;
@@ -33,6 +36,10 @@ type ProductContextValue = {
   authStatus: AuthStatus;
   authConfigured: boolean;
   authEmail: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  profileStatus: ProfileStatus;
+  profileComplete: boolean;
   allowance: ScanAllowance | null;
   selectedFile: File | null;
   previewUrl: string | null;
@@ -49,6 +56,7 @@ type ProductContextValue = {
   analyze: () => Promise<void>;
   deleteHistoryRecord: (id: string) => Promise<void>;
   clearHistory: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -56,6 +64,15 @@ const LANGUAGE_STORAGE_KEY = "harvestly-language";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 const ProductContext = createContext<ProductContextValue | null>(null);
+const PROFILE_GATE_EXEMPT_PATHS = new Set([
+  "/complete-profile",
+  "/privacy",
+  "/data-deletion",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/update-password",
+]);
 const languageListeners = new Set<() => void>();
 const historyListeners = new Set<() => void>();
 
@@ -119,12 +136,17 @@ function isAnalyzeSuccessResponse(value: unknown): value is AnalyzeSuccessRespon
 }
 
 export function ProductProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const language = useSyncExternalStore(subscribeLanguage, getLanguageSnapshot, (): Language => "km");
   const localHistorySnapshot = useSyncExternalStore(subscribeHistory, getHistorySnapshot, () => "");
   const localHistoryRecords = useMemo(() => parseScanHistory(localHistorySnapshot), [localHistorySnapshot]);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [authConfigured, setAuthConfigured] = useState(true);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>("loading");
   const [allowance, setAllowance] = useState<ScanAllowance | null>(null);
   const [remoteHistoryRecords, setRemoteHistoryRecords] = useState<StoredScanRecord[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -139,20 +161,50 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const activeRequest = useRef<AbortController | null>(null);
   const historyRecords = authStatus === "authenticated" ? remoteHistoryRecords : localHistoryRecords;
 
+  const refreshProfile = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setUsername(null);
+      setAvatarUrl(null);
+      setProfileStatus("guest");
+      return;
+    }
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      setUsername(null);
+      setAvatarUrl(null);
+      setProfileStatus("guest");
+      return;
+    }
+    const profile = readAccountProfile(userData.user);
+    setUsername(profile.username);
+    setAvatarUrl(profile.avatarUrl);
+    setProfileStatus(profile.profileComplete ? "complete" : "incomplete");
+  }, []);
+
   useEffect(() => {
     let active = true;
     const supabase = createSupabaseBrowserClient();
 
     async function loadRegisteredState() {
-      const response = await fetch("/api/scans", { cache: "no-store" });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!active) return;
-      if (response.ok && payload && typeof payload === "object" && "records" in payload && "allowance" in payload) {
-        const state = payload as AuthenticatedScanState;
-        setRemoteHistoryRecords(state.records);
-        setAllowance(state.allowance);
-        setHistorySaveError(false);
-      } else {
+      try {
+        const response = await fetch("/api/scans", { cache: "no-store" });
+        const payload: unknown = await response.json().catch(() => null);
+        if (!active) return;
+        if (response.ok && payload && typeof payload === "object" && "records" in payload && "allowance" in payload) {
+          const state = payload as AuthenticatedScanState;
+          setRemoteHistoryRecords(state.records);
+          setAllowance(state.allowance);
+          setHistorySaveError(false);
+          return;
+        }
+        setAllowance(null);
+        setRemoteHistoryRecords([]);
+        setHistorySaveError(true);
+      } catch {
+        if (!active) return;
+        setAllowance(null);
+        setRemoteHistoryRecords([]);
         setHistorySaveError(true);
       }
     }
@@ -163,6 +215,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         setAuthConfigured(false);
         setAuthStatus("guest");
         setAuthEmail(null);
+        setUsername(null);
+        setAvatarUrl(null);
+        setProfileStatus("guest");
         setAllowance(readAnonymousAllowance());
         return;
       }
@@ -171,10 +226,18 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       if (data.user) {
         setAuthStatus("authenticated");
         setAuthEmail(data.user.email ?? null);
+        setAllowance(null);
+        setHistorySaveError(false);
+        setProfileStatus("loading");
+        await refreshProfile();
+        if (!active) return;
         await loadRegisteredState();
       } else {
         setAuthStatus("guest");
         setAuthEmail(null);
+        setUsername(null);
+        setAvatarUrl(null);
+        setProfileStatus("guest");
         setRemoteHistoryRecords([]);
         setAllowance(readAnonymousAllowance());
       }
@@ -190,7 +253,17 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       activeRequest.current?.abort();
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     };
-  }, []);
+  }, [refreshProfile]);
+
+  useEffect(() => {
+    if (
+      authStatus === "authenticated"
+      && profileStatus === "incomplete"
+      && !PROFILE_GATE_EXEMPT_PATHS.has(pathname)
+    ) {
+      router.replace(profileSetupPath(pathname));
+    }
+  }, [authStatus, pathname, profileStatus, router]);
 
   function setLanguage(nextLanguage: Language) {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
@@ -336,16 +409,20 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setAuthStatus("guest");
     setAuthEmail(null);
+    setUsername(null);
+    setAvatarUrl(null);
+    setProfileStatus("guest");
     setRemoteHistoryRecords([]);
     setAllowance(readAnonymousAllowance());
   }
 
   return (
     <ProductContext.Provider value={{
-      language, setLanguage, authStatus, authConfigured, authEmail, allowance,
+      language, setLanguage, authStatus, authConfigured, authEmail, username, avatarUrl,
+      profileStatus, profileComplete: profileStatus === "complete", allowance,
       selectedFile, previewUrl, uploadError, analysisStatus, analysisError, result,
       historyRecords, historyFilter, setHistoryFilter, historySaveError,
-      selectImage, clearImage, analyze, deleteHistoryRecord, clearHistory, signOut,
+      selectImage, clearImage, analyze, deleteHistoryRecord, clearHistory, refreshProfile, signOut,
     }}>
       {children}
     </ProductContext.Provider>

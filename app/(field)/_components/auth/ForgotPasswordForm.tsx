@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { safeReturnPath } from "@/lib/auth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getPublicSiteUrl } from "@/lib/supabase/config";
 import { useProduct } from "../state/ProductProvider";
 
 export function ForgotPasswordForm() {
@@ -30,8 +31,14 @@ export function ForgotPasswordForm() {
 
     setPending(true);
     setMessage(null);
+    const siteUrl = getPublicSiteUrl();
+    if (!siteUrl) {
+      setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
+      setPending(false);
+      return;
+    }
     const updatePath = `/update-password?next=${encodeURIComponent(returnPath)}`;
-    const redirectTo = `${window.location.origin}/auth/callback?flow=recovery&next=${encodeURIComponent(updatePath)}&returnTo=${encodeURIComponent(returnPath)}`;
+    const redirectTo = `${siteUrl}/auth/callback?flow=recovery&next=${encodeURIComponent(updatePath)}&returnTo=${encodeURIComponent(returnPath)}`;
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) {
       setMessage(language === "km" ? "មិនអាចផ្ញើអ៊ីមែលស្តារពាក្យសម្ងាត់ឥឡូវនេះបានទេ។ សូមព្យាយាមម្តងទៀត។" : "Unable to send a recovery email right now. Please try again.");

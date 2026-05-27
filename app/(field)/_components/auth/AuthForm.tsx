@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { safeReturnPath } from "@/lib/auth";
+import { profileSetupPath, readAccountProfile } from "@/lib/profile";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getPublicSiteUrl } from "@/lib/supabase/config";
 import { useProduct } from "../state/ProductProvider";
 
 type AuthMode = "login" | "signup";
@@ -32,10 +34,21 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       return;
     }
 
+    const authClient = supabase;
     setPending(true);
     setMessage(null);
-    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`;
+    async function signedInDestination() {
+      const { data } = await authClient.auth.getUser();
+      return readAccountProfile(data.user).profileComplete ? returnPath : profileSetupPath(returnPath);
+    }
     if (isSignup) {
+      const siteUrl = getPublicSiteUrl();
+      if (!siteUrl) {
+        setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
+        setPending(false);
+        return;
+      }
+      const callbackUrl = `${siteUrl}/auth/callback?next=${encodeURIComponent(returnPath)}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -46,17 +59,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       } else if (!data.session) {
         setEmailSent(true);
       } else {
-        window.location.assign(returnPath);
+        window.location.assign(await signedInDestination());
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setMessage(language === "km" ? "អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។ សូមព្យាយាមម្តងទៀត។" : "Email or password is incorrect. Please try again.");
-      else window.location.assign(returnPath);
+      else window.location.assign(await signedInDestination());
     }
     setPending(false);
   }
 
-  async function signInWithGoogle() {
+  async function signInWithOAuth(provider: "google" | "facebook") {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication is not configured yet.");
@@ -65,10 +78,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
     setPending(true);
     setMessage(null);
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`;
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+    const siteUrl = getPublicSiteUrl();
+    if (!siteUrl) {
+      setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
+      setPending(false);
+      return;
+    }
+    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(returnPath)}`;
+    const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
     if (error) {
-      setMessage(language === "km" ? "មិនអាចចាប់ផ្តើមការចូលជាមួយ Google បានទេ។ សូមព្យាយាមម្តងទៀត។" : "Google sign-in could not be started. Please try again.");
+      const providerName = provider === "google" ? "Google" : "Facebook";
+      setMessage(language === "km" ? `មិនអាចចាប់ផ្តើមការចូលជាមួយ ${providerName} បានទេ។ សូមព្យាយាមម្តងទៀត។` : `${providerName} sign-in could not be started. Please try again.`);
       setPending(false);
     }
   }
@@ -109,9 +129,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </button>
       </form>
       <div className="auth-divider"><span>{language === "km" ? "ឬ" : "or"}</span></div>
-      <button className="google-button" disabled={pending} type="button" onClick={signInWithGoogle}>
-        <span aria-hidden="true">G</span>{language === "km" ? "បន្តជាមួយ Google" : "Continue with Google"}
-      </button>
+      <div className="oauth-buttons">
+        <button className="google-button" disabled={pending} type="button" onClick={() => void signInWithOAuth("google")}>
+          <span aria-hidden="true">G</span>{language === "km" ? "បន្តជាមួយ Google" : "Continue with Google"}
+        </button>
+        <button className="google-button facebook-button" disabled={pending} type="button" onClick={() => void signInWithOAuth("facebook")}>
+          <span aria-hidden="true">f</span>{language === "km" ? "បន្តជាមួយ Facebook" : "Continue with Facebook"}
+        </button>
+      </div>
       <p className="auth-switch">
         {isSignup ? (language === "km" ? "មានគណនីរួចហើយ?" : "Already have an account?") : (language === "km" ? "មិនទាន់មានគណនី?" : "Need an account?")}{" "}
         <Link href={`${isSignup ? "/login" : "/signup"}${nextQuery}`}>

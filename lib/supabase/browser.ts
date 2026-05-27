@@ -4,12 +4,14 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPublicSupabaseConfig } from "./config";
 
-let client: SupabaseClient | null | undefined;
+let client: SupabaseClient | undefined;
 
 export function createSupabaseBrowserClient() {
-  if (client !== undefined) return client;
+  if (client) return client;
 
   const config = getPublicSupabaseConfig();
-  client = config ? createBrowserClient(config.url, config.publishableKey) : null;
+  if (!config) return null;
+
+  client = createBrowserClient(config.url, config.anonKey);
   return client;
 }

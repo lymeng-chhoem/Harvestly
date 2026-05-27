@@ -44,21 +44,24 @@ Supported `conditionCode` values currently include `rice_brown_spot`, `rice_blas
 
 ## Authentication and scan limits
 
-Harvestly uses Supabase Auth for email/password accounts, Google login, and password recovery. Email/password signup requires email confirmation. Configure `.env.local` for local development, and add the same values to the Vercel project environment:
+Harvestly uses Supabase Auth for email/password accounts, Google login, Facebook login, and password recovery. Email/password signup requires email confirmation. Copy the placeholder structure from `.env.local.example` into your private `.env.local` for local development. Configure the public values in Vercel for deployed environments:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
-SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SUPPORT_EMAIL=support@example.com
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` must remain server-only. It is used by `/api/analyze` to reserve, complete, or release registered-user scan slots after the route validates the signed-in session.
+`HARVESTLY_MODEL_ENDPOINT` and `HARVESTLY_MODEL_API_KEY` must remain server-only. They are used only by the analysis route. Never move these values into `NEXT_PUBLIC_` variables.
+
+For localhost, use `NEXT_PUBLIC_SITE_URL=http://localhost:3000`. In Vercel, set `NEXT_PUBLIC_SITE_URL` to that deployment's canonical public origin, such as `https://your-production-domain.example`, without a trailing path.
 
 ### Supabase setup
 
-1. Create a hosted Supabase project, then copy its project URL, publishable key, and service role key into the environment variables above.
+1. Create a hosted Supabase project, then copy its project URL and anon key into the environment variables above.
 2. In **Authentication > Providers**, enable Email and keep **Confirm email** enabled. Supabase's built-in email sender is sufficient while developing.
-3. Apply [`supabase/migrations/202605260001_auth_scan_usage.sql`](supabase/migrations/202605260001_auth_scan_usage.sql) in the SQL editor or through your Supabase CLI migration workflow.
+3. Registered username, scan allowance, and result history are stored in the signed-in user's Supabase Auth metadata, so the current local authentication flow does not require public database tables.
 4. In **Authentication > URL Configuration**, set **Site URL** to the final production site URL once known.
 5. Add redirect URLs for every environment that can initiate authentication:
 
@@ -86,23 +89,46 @@ https://your-project-ref.supabase.co/auth/v1/callback
 
 The Google flow uses two redirects: Google returns to Supabase at `/auth/v1/callback`, and Supabase returns the signed-in user to Harvestly at `/auth/callback`.
 
+### Facebook login setup
+
+1. Create a Meta app with Facebook Login and request `public_profile` and `email`.
+2. Add the Supabase provider callback URL as a valid OAuth redirect URI in Meta:
+
+```text
+https://your-project-ref.supabase.co/auth/v1/callback
+```
+
+3. Copy the Meta App ID and App Secret into **Authentication > Providers > Facebook** in Supabase and enable the provider.
+4. While the Meta app is in development mode, test with an administrator, developer, or tester account assigned to that app.
+5. Before allowing ordinary Facebook users, deploy the public legal routes and configure Meta with:
+
+```text
+Privacy Policy URL: https://your-production-domain.example/privacy
+Data Deletion Instructions URL: https://your-production-domain.example/data-deletion
+```
+
+Set the app domain and complete any Meta live-mode requirements before public release.
+
 ### Authentication checks
 
 After configuration, test locally:
 
-1. Create an email/password account, open the confirmation email, and sign in.
-2. Use **Continue with Google** and confirm that you return to Harvestly signed in.
-3. From `/login`, choose **Forgot password?**, open the recovery email, choose a new password, and sign in with the new password.
-4. Open an expired recovery link and confirm it offers a new reset email rather than showing an ordinary login error.
+1. Create an email/password account, open the confirmation email, and sign in. Confirm that `/complete-profile` requests a lowercase username before continuing.
+2. Try an invalid username, then save a valid username. This username is stored in the signed-in user's Supabase Auth metadata and does not require a profile-table migration.
+3. Visit the homepage after setup and confirm its top-right greeting includes that username and opens the structured account panel in Settings.
+4. Use **Continue with Google** and confirm that a new or existing incomplete profile is sent through the same username setup flow.
+5. Use **Continue with Facebook** with an assigned Meta tester account and confirm that a new or existing incomplete profile is sent through the same username setup flow.
+6. From `/login`, choose **Forgot password?**, open the recovery email, choose a new password, and sign in with the new password.
+7. Open an expired recovery link and confirm it offers a new reset email rather than showing an ordinary login error.
+8. Visit `/privacy` and `/data-deletion` on the deployed origin before entering those URLs in Meta.
 
 Access rules:
 
 - Anonymous visitors receive one successful crop scan on their current browser. Usage and history are stored in `localStorage`, so clearing browser storage resets this MVP convenience limit.
 - Signed-in users receive five successful scans each week. Weeks reset Monday at `00:00` in `Asia/Phnom_Penh`.
-- Failed registered analyses release their reserved slot. Successful registered result metadata is saved in Supabase and available across devices; uploaded photos are never saved.
+- Each signed-in account chooses a display username stored in Supabase Auth metadata. Usernames use 3-24 lowercase letters, numbers, or underscores.
+- Only successful registered analyses spend a weekly scan. Successful registered result metadata is saved in Supabase Auth metadata and available across devices; uploaded photos are never saved.
 - The community page requires a signed-in account. `community_posts` is prepared for future use, but posting is not included in this MVP.
-
-Facebook and Telegram login are future features and are not enabled or shown in the current authentication interface.
 
 ## Learn More
 

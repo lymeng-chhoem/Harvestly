@@ -45,7 +45,7 @@ const text = {
   analyze: { km: "ពិនិត្យរូបថ្មី", en: "Analyze new photo" },
   saveError: {
     km: "មិនអាចផ្លាស់ប្តូរប្រវត្តិនៅលើឧបករណ៍នេះបានទេ។",
-    en: "History could not be updated on this device.",
+    en: "History could not be updated.",
   },
 };
 
