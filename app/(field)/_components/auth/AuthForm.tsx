@@ -24,7 +24,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
   const isSignup = mode === "signup";
+
+  function authCallbackUrl() {
+    const origin = typeof window === "undefined" ? getPublicSiteUrl() : window.location.origin;
+    if (!origin) return null;
+    return `${origin.replace(/\/+$/, "")}/auth/callback?next=${encodeURIComponent(returnPath)}`;
+  }
+
+  function isExistingEmailResponse(user: { identities?: unknown } | null) {
+    return Boolean(user && Array.isArray(user.identities) && user.identities.length === 0);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,21 +61,26 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         : profileSetupPath(returnPath);
     }
     if (isSignup) {
-      const siteUrl = getPublicSiteUrl();
-      if (!siteUrl) {
+      const submittedEmail = email.trim().toLowerCase();
+      const callbackUrl = authCallbackUrl();
+      if (!callbackUrl) {
         setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
         setPending(false);
         return;
       }
-      const callbackUrl = `${siteUrl}/auth/callback?next=${encodeURIComponent(returnPath)}`;
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: submittedEmail,
         password,
         options: { emailRedirectTo: callbackUrl },
       });
       if (error) {
         setMessage(language === "km" ? "មិនអាចបង្កើតគណនីបានទេ។ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់ រួចព្យាយាមម្តងទៀត។" : "Unable to create your account. Check your email and password, then try again.");
+      } else if (isExistingEmailResponse(data.user)) {
+        setMessage(language === "km"
+          ? "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមចូល ឬប្រើភ្លេចពាក្យសម្ងាត់។"
+          : "This email already has an account. Log in instead, or use Forgot password.");
       } else if (!data.session) {
+        setConfirmationEmail(submittedEmail);
         setEmailSent(true);
       } else {
         window.location.assign(await signedInDestination());
@@ -77,6 +93,27 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setPending(false);
   }
 
+  async function resendConfirmation() {
+    const supabase = createSupabaseBrowserClient();
+    const callbackUrl = authCallbackUrl();
+    if (!supabase || !callbackUrl || !confirmationEmail) {
+      setMessage(language === "km" ? "ការចូលគណនីមិនអាចប្រើបាននៅពេលនេះទេ។" : "Authentication is not available right now.");
+      return;
+    }
+
+    setPending(true);
+    setMessage(null);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: confirmationEmail,
+      options: { emailRedirectTo: callbackUrl },
+    });
+    setMessage(error
+      ? (language === "km" ? "មិនអាចផ្ញើអ៊ីមែលបញ្ជាក់ម្តងទៀតបានទេ។" : "Unable to resend the confirmation email right now.")
+      : (language === "km" ? "បានផ្ញើអ៊ីមែលបញ្ជាក់ម្តងទៀត។ សូមពិនិត្យប្រអប់ចូល និងសារឥតបានការ។" : "Confirmation email sent again. Check your inbox and spam folder."));
+    setPending(false);
+  }
+
   async function signInWithOAuth(provider: "google" | "facebook") {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
@@ -86,13 +123,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
     setPending(true);
     setMessage(null);
-    const siteUrl = getPublicSiteUrl();
-    if (!siteUrl) {
+    const redirectTo = authCallbackUrl();
+    if (!redirectTo) {
       setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
       setPending(false);
       return;
     }
-    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(returnPath)}`;
     const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
     if (error) {
       const providerName = provider === "google" ? "Google" : "Facebook";
@@ -107,6 +143,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         <p className="eyebrow">{language === "km" ? "ពិនិត្យអ៊ីមែល" : "Check your email"}</p>
         <h1>{language === "km" ? "បញ្ជាក់គណនីរបស់អ្នក" : "Confirm your account"}</h1>
         <p>{language === "km" ? "យើងបានផ្ញើតំណបញ្ជាក់ទៅអ៊ីមែលរបស់អ្នក។ សូមបើកតំណនោះមុនពេលចូលប្រើមុខងារសមាជិក។" : "We sent a confirmation link to your email. Open it before using registered features."}</p>
+        {message && <p className="form-error" role="status">{message}</p>}
+        <button className="paper-button auth-link" disabled={pending} type="button" onClick={() => void resendConfirmation()}>
+          {pending ? (language === "km" ? "កំពុងផ្ញើ..." : "Sending...") : (language === "km" ? "ផ្ញើអ៊ីមែលបញ្ជាក់ម្តងទៀត" : "Resend confirmation email")}
+        </button>
         <Link className="paper-button auth-link" href={`/login${nextQuery}`}>{language === "km" ? "ទៅទំព័រចូល" : "Go to login"}</Link>
       </section>
     );
