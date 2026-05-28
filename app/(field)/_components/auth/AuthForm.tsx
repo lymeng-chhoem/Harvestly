@@ -17,6 +17,7 @@ type PasswordRequirement = {
     en: string;
     km: string;
   };
+  hint?: string;
   test: (password: string) => boolean;
 };
 
@@ -38,7 +39,11 @@ const passwordRequirements: PasswordRequirement[] = [
   },
   {
     id: "special",
-    label: { en: "One special character", km: "មានសញ្ញាពិសេសយ៉ាងតិច ១" },
+    label: {
+      en: "One special character",
+      km: "មានសញ្ញាពិសេសយ៉ាងតិច ១",
+    },
+    hint: "! @ # $ % & * ?",
     test: (value) => /[^A-Za-z0-9\s]/.test(value),
   },
 ];
@@ -257,6 +262,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
                 <li className={requirement.met ? "met" : ""} key={requirement.id}>
                   <span aria-hidden="true">{requirement.met ? "✓" : "○"}</span>
                   {language === "km" ? requirement.label.km : requirement.label.en}
+                  {requirement.hint && <small>{requirement.hint}</small>}
                 </li>
               ))}
             </ul>

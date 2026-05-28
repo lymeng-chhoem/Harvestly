@@ -1996,6 +1996,13 @@ button:disabled {
   background: color-mix(in oklch, var(--rust-deep) 88%, var(--ink));
 }
 
+.password-requirements li small {
+  color: color-mix(in oklch, var(--ink) 62%, var(--parchment));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .auth-form .rust-button {
   width: 100%;
   margin-top: 4px;
