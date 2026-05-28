@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { safeReturnPath } from "@/lib/auth";
-import { profileSetupPath, readAccountProfile } from "@/lib/profile";
+import { profileSetupPath, readDatabaseAccountProfile } from "@/lib/profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -45,5 +45,12 @@ async function getAuthenticatedDestination(
   if (isRecovery) return destination;
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return destination;
-  return readAccountProfile(userData.user).profileComplete ? destination : profileSetupPath(destination);
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("username, avatar_url")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+  return readDatabaseAccountProfile(profileData, userData.user).profileComplete
+    ? destination
+    : profileSetupPath(destination);
 }

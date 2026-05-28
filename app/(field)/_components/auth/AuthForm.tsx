@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { safeReturnPath } from "@/lib/auth";
-import { profileSetupPath, readAccountProfile } from "@/lib/profile";
+import { profileSetupPath, readDatabaseAccountProfile } from "@/lib/profile";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getPublicSiteUrl } from "@/lib/supabase/config";
 import { useProduct } from "../state/ProductProvider";
@@ -39,7 +39,15 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setMessage(null);
     async function signedInDestination() {
       const { data } = await authClient.auth.getUser();
-      return readAccountProfile(data.user).profileComplete ? returnPath : profileSetupPath(returnPath);
+      if (!data.user) return profileSetupPath(returnPath);
+      const { data: profileData } = await authClient
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      return readDatabaseAccountProfile(profileData, data.user).profileComplete
+        ? returnPath
+        : profileSetupPath(returnPath);
     }
     if (isSignup) {
       const siteUrl = getPublicSiteUrl();

@@ -13,6 +13,11 @@ type AuthUser = {
   } | null;
 } | null;
 
+type ProfileRow = {
+  username?: unknown;
+  avatar_url?: unknown;
+} | null;
+
 export function normalizeUsername(value: string) {
   return value.trim().toLowerCase();
 }
@@ -31,6 +36,19 @@ export function readAccountProfile(user: AuthUser): AccountProfile {
   return {
     username: username && isValidUsername(username) ? username : null,
     avatarUrl: typeof metadata?.avatar_url === "string" ? metadata.avatar_url : null,
+    profileComplete: Boolean(username && isValidUsername(username)),
+  };
+}
+
+export function readDatabaseAccountProfile(row: ProfileRow, user?: AuthUser): AccountProfile {
+  const username = typeof row?.username === "string" ? normalizeUsername(row.username) : null;
+  const avatarUrl = typeof row?.avatar_url === "string"
+    ? row.avatar_url
+    : (typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null);
+
+  return {
+    username: username && isValidUsername(username) ? username : null,
+    avatarUrl,
     profileComplete: Boolean(username && isValidUsername(username)),
   };
 }

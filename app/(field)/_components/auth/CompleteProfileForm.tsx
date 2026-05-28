@@ -4,7 +4,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/auth";
 import { isValidUsername, normalizeUsername } from "@/lib/profile";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useProduct } from "../state/ProductProvider";
 
 export function CompleteProfileForm() {
@@ -33,26 +32,33 @@ export function CompleteProfileForm() {
         : "Use 3-24 lowercase letters, numbers, or underscores only.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setMessage(language === "km" ? "មិនអាចរៀបចំគណនីបាននៅពេលនេះទេ។" : "Account setup is unavailable right now.");
-      return;
-    }
 
     setPending(true);
     setMessage(null);
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
+    const response = await fetch("/api/profile/username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: normalizedUsername }),
+    });
+    if (response.status === 401) {
       router.replace(`/login?next=${encodeURIComponent(returnPath)}`);
       return;
     }
-    const { error } = await supabase.auth.updateUser({
-      data: { harvestly_username: normalizedUsername },
-    });
-    if (error) {
+    if (response.status === 409) {
       setMessage(language === "km"
-        ? "មិនអាចរក្សាទុកឈ្មោះបានទេ។ សូមព្យាយាមម្ដងទៀត។"
-        : "Unable to save your username. Please try again.");
+        ? "ឈ្មោះអ្នកប្រើនេះត្រូវបានប្រើរួចហើយ។ សូមសាកល្បងឈ្មោះផ្សេងទៀត។"
+        : "That username is already taken. Try another one.");
+      setPending(false);
+      return;
+    }
+    if (!response.ok) {
+      setMessage(response.status === 400
+        ? (language === "km"
+          ? "ឈ្មោះត្រូវមាន 3-24 តួអក្សរ ហើយប្រើតែអក្សរ a-z លេខ ឬសញ្ញា _។"
+          : "Use 3-24 lowercase letters, numbers, or underscores only.")
+        : (language === "km"
+          ? "មិនអាចរក្សាទុកឈ្មោះបានទេ។ សូមព្យាយាមម្ដងទៀត។"
+          : "Unable to save your username. Please try again."));
       setPending(false);
       return;
     }

@@ -21,7 +21,7 @@ import {
   readAnonymousAllowance,
   spendAnonymousScan,
 } from "@/lib/scan-usage";
-import { profileSetupPath, readAccountProfile } from "@/lib/profile";
+import { profileSetupPath, readDatabaseAccountProfile } from "@/lib/profile";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type UploadError = "type" | "size" | null;
@@ -176,7 +176,12 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       setProfileStatus("guest");
       return;
     }
-    const profile = readAccountProfile(userData.user);
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("username, avatar_url")
+      .eq("id", userData.user.id)
+      .maybeSingle();
+    const profile = readDatabaseAccountProfile(profileData, userData.user);
     setUsername(profile.username);
     setAvatarUrl(profile.avatarUrl);
     setProfileStatus(profile.profileComplete ? "complete" : "incomplete");
