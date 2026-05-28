@@ -37,6 +37,28 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     return Boolean(user && Array.isArray(user.identities) && user.identities.length === 0);
   }
 
+  function signupErrorMessage(error: { message?: string }) {
+    const detail = error.message?.toLowerCase() ?? "";
+    if (detail.includes("redirect") || detail.includes("not allowed")) {
+      return language === "km"
+        ? "Signup redirect is not allowed for this deployment. Add this Vercel URL in Supabase Auth redirect URLs."
+        : "Signup redirect is not allowed for this deployment. Add this Vercel URL in Supabase Auth redirect URLs.";
+    }
+    if (detail.includes("rate") || detail.includes("too many")) {
+      return language === "km"
+        ? "Too many signup emails were requested. Wait a few minutes, then try again."
+        : "Too many signup emails were requested. Wait a few minutes, then try again.";
+    }
+    if (detail.includes("password")) {
+      return language === "km"
+        ? "Use a stronger password, then try again."
+        : "Use a stronger password, then try again.";
+    }
+    return language === "km"
+      ? "Unable to create your account right now. Check the email address and try again."
+      : "Unable to create your account right now. Check the email address and try again.";
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const supabase = createSupabaseBrowserClient();
@@ -74,7 +96,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         options: { emailRedirectTo: callbackUrl },
       });
       if (error) {
-        setMessage(language === "km" ? "មិនអាចបង្កើតគណនីបានទេ។ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់ រួចព្យាយាមម្តងទៀត។" : "Unable to create your account. Check your email and password, then try again.");
+        setMessage(signupErrorMessage(error));
       } else if (isExistingEmailResponse(data.user)) {
         setMessage(language === "km"
           ? "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមចូល ឬប្រើភ្លេចពាក្យសម្ងាត់។"
