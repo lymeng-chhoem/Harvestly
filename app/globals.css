@@ -1936,6 +1936,66 @@ button:disabled {
   background: color-mix(in oklch, var(--cream) 60%, transparent);
 }
 
+.password-requirements {
+  margin-top: -4px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in oklch, var(--rust-deep) 30%, var(--parchment));
+  border-radius: var(--control-radius);
+  color: color-mix(in oklch, var(--ink) 72%, var(--parchment));
+  background: color-mix(in oklch, var(--cream) 34%, transparent);
+}
+
+.password-requirements.is-active {
+  border-color: color-mix(in oklch, var(--rust-deep) 43%, var(--parchment));
+}
+
+.password-requirements p {
+  margin: 0 0 9px;
+  color: color-mix(in oklch, var(--ink) 82%, var(--parchment));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.password-requirements ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  list-style: none;
+}
+
+.password-requirements li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.password-requirements li span {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: color-mix(in oklch, var(--ink) 58%, var(--parchment));
+  font-size: 13px;
+  line-height: 1;
+}
+
+.password-requirements li.met {
+  color: color-mix(in oklch, var(--rust-deep) 84%, var(--ink));
+}
+
+.password-requirements li.met span {
+  color: var(--cream);
+  background: color-mix(in oklch, var(--rust-deep) 88%, var(--ink));
+}
+
 .auth-form .rust-button {
   width: 100%;
   margin-top: 4px;
@@ -2477,6 +2537,10 @@ button:disabled {
   }
 
   .usage-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .password-requirements ul {
     grid-template-columns: 1fr;
   }
 

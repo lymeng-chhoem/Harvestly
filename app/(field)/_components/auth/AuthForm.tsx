@@ -11,6 +11,45 @@ import { useProduct } from "../state/ProductProvider";
 
 type AuthMode = "login" | "signup";
 
+type PasswordRequirement = {
+  id: string;
+  label: {
+    en: string;
+    km: string;
+  };
+  test: (password: string) => boolean;
+};
+
+const passwordRequirements: PasswordRequirement[] = [
+  {
+    id: "length",
+    label: { en: "At least 8 characters", km: "យ៉ាងតិច ៨ តួអក្សរ" },
+    test: (value) => value.length >= 8,
+  },
+  {
+    id: "uppercase",
+    label: { en: "One uppercase letter", km: "មានអក្សរធំយ៉ាងតិច ១" },
+    test: (value) => /[A-Z]/.test(value),
+  },
+  {
+    id: "number",
+    label: { en: "One number", km: "មានលេខយ៉ាងតិច ១" },
+    test: (value) => /\d/.test(value),
+  },
+  {
+    id: "special",
+    label: { en: "One special character", km: "មានសញ្ញាពិសេសយ៉ាងតិច ១" },
+    test: (value) => /[^A-Za-z0-9\s]/.test(value),
+  },
+];
+
+function checkPasswordRequirements(password: string) {
+  return passwordRequirements.map((requirement) => ({
+    ...requirement,
+    met: requirement.test(password),
+  }));
+}
+
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const { language } = useProduct();
   const searchParams = useSearchParams();
@@ -26,6 +65,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [emailSent, setEmailSent] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const isSignup = mode === "signup";
+  const passwordChecks = checkPasswordRequirements(password);
+  const passwordMeetsRequirements = passwordChecks.every((requirement) => requirement.met);
+  const showPasswordRequirements = isSignup && password.length > 0;
 
   function authCallbackUrl() {
     const origin = typeof window === "undefined" ? getPublicSiteUrl() : window.location.origin;
@@ -84,6 +126,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     }
     if (isSignup) {
       const submittedEmail = email.trim().toLowerCase();
+      if (!passwordMeetsRequirements) {
+        setMessage(language === "km"
+          ? "សូមបំពេញលក្ខខណ្ឌពាក្យសម្ងាត់ទាំងអស់ មុនបង្កើតគណនី។"
+          : "Meet all password requirements before creating your account.");
+        setPending(false);
+        return;
+      }
       const callbackUrl = authCallbackUrl();
       if (!callbackUrl) {
         setMessage(language === "km" ? "ការចូលគណនីមិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។" : "Authentication site URL is not configured yet.");
@@ -186,8 +235,33 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </label>
         <label>
           <span>{language === "km" ? "ពាក្យសម្ងាត់" : "Password"}</span>
-          <input type="password" required minLength={6} autoComplete={isSignup ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} />
+          <input
+            type="password"
+            required
+            minLength={isSignup ? 8 : 6}
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            value={password}
+            aria-describedby={isSignup ? "password-requirements" : undefined}
+            onChange={(event) => setPassword(event.target.value)}
+          />
         </label>
+        {isSignup && (
+          <div
+            className={`password-requirements ${showPasswordRequirements ? "is-active" : ""}`}
+            id="password-requirements"
+            aria-live="polite"
+          >
+            <p>{language === "km" ? "ពាក្យសម្ងាត់ត្រូវមាន៖" : "Password must include:"}</p>
+            <ul>
+              {passwordChecks.map((requirement) => (
+                <li className={requirement.met ? "met" : ""} key={requirement.id}>
+                  <span aria-hidden="true">{requirement.met ? "✓" : "○"}</span>
+                  {language === "km" ? requirement.label.km : requirement.label.en}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {!isSignup && (
           <Link className="auth-forgot-link" href={`/forgot-password${nextQuery}`}>
             {language === "km" ? "ភ្លេចពាក្យសម្ងាត់?" : "Forgot password?"}
