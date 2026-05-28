@@ -41,7 +41,11 @@ export function readAccountProfile(user: AuthUser): AccountProfile {
 }
 
 export function readDatabaseAccountProfile(row: ProfileRow, user?: AuthUser): AccountProfile {
-  const username = typeof row?.username === "string" ? normalizeUsername(row.username) : null;
+  const databaseUsername = typeof row?.username === "string" ? normalizeUsername(row.username) : null;
+  const metadataUsername = typeof user?.user_metadata?.harvestly_username === "string"
+    ? normalizeUsername(user.user_metadata.harvestly_username)
+    : null;
+  const username = databaseUsername && isValidUsername(databaseUsername) ? databaseUsername : metadataUsername;
   const avatarUrl = typeof row?.avatar_url === "string"
     ? row.avatar_url
     : (typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null);

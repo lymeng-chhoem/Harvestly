@@ -60,10 +60,11 @@ For localhost, use `NEXT_PUBLIC_SITE_URL=http://localhost:3000`. In Vercel, set 
 ### Supabase setup
 
 1. Create a hosted Supabase project, then copy its project URL and anon key into the environment variables above.
-2. In **Authentication > Providers**, enable Email and keep **Confirm email** enabled. Supabase's built-in email sender is sufficient while developing.
-3. Registered usernames are claimed through the `profiles.username` unique index and mirrored to Supabase Auth metadata for the app greeting. Scan allowance and result history are still stored in the signed-in user's Supabase Auth metadata.
-4. In **Authentication > URL Configuration**, set **Site URL** to the final production site URL once known.
-5. Add redirect URLs for every environment that can initiate authentication:
+2. Apply the SQL files in `supabase/migrations` to that project before testing login. Without those tables and functions, username setup shows an account database setup error.
+3. In **Authentication > Providers**, enable Email and keep **Confirm email** enabled. Supabase's built-in email sender is sufficient while developing.
+4. Registered usernames are claimed through the `profiles.username` unique index and mirrored to Supabase Auth metadata for the app greeting. Scan allowance and result history are still stored in the signed-in user's Supabase Auth metadata.
+5. In **Authentication > URL Configuration**, set **Site URL** to the final production site URL once known.
+6. Add redirect URLs for every environment that can initiate authentication:
 
 ```text
 http://localhost:3000/auth/callback

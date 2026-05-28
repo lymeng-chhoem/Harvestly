@@ -6,6 +6,25 @@ import { safeReturnPath } from "@/lib/auth";
 import { isValidUsername, normalizeUsername } from "@/lib/profile";
 import { useProduct } from "../state/ProductProvider";
 
+type UsernameSaveError =
+  | "database_not_configured"
+  | "invalid_username"
+  | "service"
+  | "unauthorized"
+  | "username_taken";
+
+function readUsernameSaveError(payload: unknown): UsernameSaveError | null {
+  if (!payload || typeof payload !== "object" || !("error" in payload)) return null;
+  const error = (payload as { error?: unknown }).error;
+  return error === "database_not_configured"
+    || error === "invalid_username"
+    || error === "service"
+    || error === "unauthorized"
+    || error === "username_taken"
+    ? error
+    : null;
+}
+
 export function CompleteProfileForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,19 +54,39 @@ export function CompleteProfileForm() {
 
     setPending(true);
     setMessage(null);
-    const response = await fetch("/api/profile/username", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: normalizedUsername }),
-    });
+    let response: Response;
+    let payload: unknown = null;
+    try {
+      response = await fetch("/api/profile/username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: normalizedUsername }),
+      });
+      payload = await response.json().catch(() => null);
+    } catch {
+      setMessage(language === "km"
+        ? "Unable to reach the server. Check your connection and try again."
+        : "Unable to reach the server. Check your connection and try again.");
+      setPending(false);
+      return;
+    }
+
+    const error = readUsernameSaveError(payload);
     if (response.status === 401) {
       router.replace(`/login?next=${encodeURIComponent(returnPath)}`);
       return;
     }
-    if (response.status === 409) {
+    if (response.status === 409 || error === "username_taken") {
       setMessage(language === "km"
         ? "ឈ្មោះអ្នកប្រើនេះត្រូវបានប្រើរួចហើយ។ សូមសាកល្បងឈ្មោះផ្សេងទៀត។"
         : "That username is already taken. Try another one.");
+      setPending(false);
+      return;
+    }
+    if (error === "database_not_configured") {
+      setMessage(language === "km"
+        ? "The account database is not set up yet. Apply the Supabase migrations, then try again."
+        : "The account database is not set up yet. Apply the Supabase migrations, then try again.");
       setPending(false);
       return;
     }
