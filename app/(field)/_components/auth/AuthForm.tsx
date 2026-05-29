@@ -86,6 +86,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
   function signupErrorMessage(error: { message?: string }) {
     const detail = error.message?.toLowerCase() ?? "";
+    if (detail.includes("email") || detail.includes("smtp") || detail.includes("mailer")) {
+      return language === "km"
+        ? "The confirmation email could not be sent. Check your Supabase SMTP settings, Mailtrap credentials, and sender domain."
+        : "The confirmation email could not be sent. Check your Supabase SMTP settings, Mailtrap credentials, and sender domain.";
+    }
     if (detail.includes("redirect") || detail.includes("not allowed")) {
       return language === "km"
         ? "Signup redirect is not allowed for this deployment. Add this Vercel URL in Supabase Auth redirect URLs."
@@ -150,6 +155,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         options: { emailRedirectTo: callbackUrl },
       });
       if (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Supabase signup failed:", error.message);
+        }
         setMessage(signupErrorMessage(error));
       } else if (isExistingEmailResponse(data.user)) {
         setMessage(language === "km"
@@ -184,8 +192,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       email: confirmationEmail,
       options: { emailRedirectTo: callbackUrl },
     });
+    if (error && process.env.NODE_ENV === "development") {
+      console.error("Supabase confirmation resend failed:", error.message);
+    }
     setMessage(error
-      ? (language === "km" ? "មិនអាចផ្ញើអ៊ីមែលបញ្ជាក់ម្តងទៀតបានទេ។" : "Unable to resend the confirmation email right now.")
+      ? signupErrorMessage(error)
       : (language === "km" ? "បានផ្ញើអ៊ីមែលបញ្ជាក់ម្តងទៀត។ សូមពិនិត្យប្រអប់ចូល និងសារឥតបានការ។" : "Confirmation email sent again. Check your inbox and spam folder."));
     setPending(false);
   }
