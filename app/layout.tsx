@@ -1,15 +1,10 @@
-import { Kantumruy_Pro, Poppins } from "next/font/google";
+import { Kantumruy_Pro } from "next/font/google";
 import type { ReactNode } from "react";
+import { FirebaseAnalytics } from "@/components/FirebaseAnalytics";
 import "./globals.css";
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-poppins",
-});
-
 const kantumruyPro = Kantumruy_Pro({
-  subsets: ["khmer"],
+  subsets: ["khmer", "latin"],
   weight: ["400", "600", "700"],
   variable: "--font-kantumruy-pro",
 });
@@ -22,7 +17,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="km">
-      <body className={`${poppins.variable} ${kantumruyPro.variable}`}>{children}</body>
+      <body className={kantumruyPro.variable}>
+        <FirebaseAnalytics />
+        {children}
+      </body>
     </html>
   );
 }

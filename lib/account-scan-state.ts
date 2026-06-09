@@ -1,9 +1,7 @@
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createStoredScanRecord, type ModelAnalysisResponse } from "@/lib/harvestly-content";
 import { REGISTERED_WEEKLY_SCAN_LIMIT, type ScanAllowance } from "@/lib/scan-usage";
 
-const ACCOUNT_HISTORY_KEY = "harvestly_scan_history";
-const ACCOUNT_USAGE_KEY = "harvestly_scan_usage";
 const MAX_ACCOUNT_HISTORY = 30;
 const ACCOUNT_TIME_ZONE = "Asia/Phnom_Penh";
 
@@ -35,8 +33,6 @@ function isSavedScan(value: unknown): value is SavedScan {
   const record = value as Partial<SavedScan>;
   return (
     typeof record.id === "string"
-    && typeof record.createdAt === "string"
-    && !Number.isNaN(Date.parse(record.createdAt))
     && (record.cropId === "rice" || record.cropId === "cassava" || record.cropId === "unknown")
     && typeof record.conditionCode === "string"
     && typeof record.confidence === "number"
@@ -46,73 +42,122 @@ function isSavedScan(value: unknown): value is SavedScan {
   );
 }
 
-function savedHistory(user: User) {
-  const value: unknown = user.user_metadata?.[ACCOUNT_HISTORY_KEY];
-  if (!Array.isArray(value)) return [];
-  return value.filter(isSavedScan).slice(0, MAX_ACCOUNT_HISTORY);
+type ScanUsageRow = {
+  id: string;
+  completed_at: string | null;
+  crop_id: string | null;
+  condition_code: string | null;
+  confidence: number | null;
+  risk: string | null;
+};
+
+function scanFromRow(row: ScanUsageRow): SavedScan | null {
+  const saved = {
+    id: row.id,
+    createdAt: row.completed_at ?? "",
+    cropId: row.crop_id,
+    conditionCode: row.condition_code,
+    confidence: row.confidence,
+    risk: row.risk,
+  };
+  return isSavedScan(saved) && saved.createdAt && !Number.isNaN(Date.parse(saved.createdAt)) ? saved : null;
 }
 
-function currentWeekUsage(user: User) {
-  const value: unknown = user.user_metadata?.[ACCOUNT_USAGE_KEY];
+export async function registeredScanState(supabase: SupabaseClient, userId: string) {
   const { start, reset } = weekBounds();
-  const uses = Array.isArray(value)
-    ? value.filter((entry): entry is string => {
-      if (typeof entry !== "string") return false;
-      const timestamp = Date.parse(entry);
-      return !Number.isNaN(timestamp) && timestamp >= start && timestamp < reset.getTime();
-    })
-    : [];
-  return { uses, reset };
-}
+  const weekStart = new Date(start).toISOString().slice(0, 10);
+  const usage = await supabase
+    .from("scan_usage")
+    .select("id, completed_at, crop_id, condition_code, confidence, risk")
+    .eq("user_id", userId)
+    .eq("status", "succeeded")
+    .is("hidden_at", null)
+    .order("completed_at", { ascending: false })
+    .limit(MAX_ACCOUNT_HISTORY);
+  if (usage.error) return { error: usage.error, state: null };
 
-export function registeredScanState(user: User) {
-  const { uses, reset } = currentWeekUsage(user);
+  const count = await supabase
+    .from("scan_usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("week_start", weekStart)
+    .eq("status", "succeeded");
+  if (count.error) return { error: count.error, state: null };
+
+  const used = count.count ?? 0;
   const allowance: ScanAllowance = {
     kind: "registered",
     limit: REGISTERED_WEEKLY_SCAN_LIMIT,
-    used: uses.length,
-    remaining: Math.max(0, REGISTERED_WEEKLY_SCAN_LIMIT - uses.length),
+    used,
+    remaining: Math.max(0, REGISTERED_WEEKLY_SCAN_LIMIT - used),
     resetsAt: reset.toISOString(),
   };
-  const records = savedHistory(user).map((saved) => createStoredScanRecord(saved, saved));
-  return { allowance, records, uses };
+  const records = (usage.data ?? [])
+    .map(scanFromRow)
+    .filter((scan): scan is SavedScan => Boolean(scan))
+    .map((saved) => createStoredScanRecord(saved, saved));
+
+  return { error: null, state: { allowance, records } };
 }
 
-export function addRegisteredScan(user: User, analysis: ModelAnalysisResponse) {
+export async function addRegisteredScan(supabase: SupabaseClient, userId: string, analysis: ModelAnalysisResponse) {
+  const { start, reset } = weekBounds();
+  const weekStart = new Date(start).toISOString().slice(0, 10);
+  const state = await registeredScanState(supabase, userId);
+  if (state.error || !state.state) return { error: state.error, saved: null };
+  if (state.state.allowance.remaining === 0) {
+    return {
+      error: null,
+      saved: {
+        record: null,
+        allowance: state.state.allowance,
+      },
+    };
+  }
+
   const record = createStoredScanRecord(analysis);
-  const state = registeredScanState(user);
-  const savedRecord: SavedScan = {
-    id: record.id,
-    createdAt: record.createdAt,
-    cropId: record.cropId,
-    conditionCode: record.conditionCode,
-    confidence: record.confidence,
-    risk: record.risk,
-  };
-  const nextHistory = [savedRecord, ...savedHistory(user).filter((entry) => entry.id !== record.id)]
-    .slice(0, MAX_ACCOUNT_HISTORY);
-  const nextUses = [...state.uses, record.createdAt];
+  const inserted = await supabase
+    .from("scan_usage")
+    .insert({
+      id: record.id,
+      user_id: userId,
+      week_start: weekStart,
+      status: "succeeded",
+      completed_at: record.createdAt,
+      crop_id: record.cropId,
+      condition_code: record.conditionCode,
+      confidence: record.confidence,
+      risk: record.risk,
+    })
+    .select("id")
+    .single();
+  if (inserted.error) return { error: inserted.error, saved: null };
+
+  const nextUsed = state.state.allowance.used + 1;
   const allowance: ScanAllowance = {
-    ...state.allowance,
-    used: nextUses.length,
-    remaining: Math.max(0, REGISTERED_WEEKLY_SCAN_LIMIT - nextUses.length),
+    kind: "registered",
+    limit: REGISTERED_WEEKLY_SCAN_LIMIT,
+    used: nextUsed,
+    remaining: Math.max(0, REGISTERED_WEEKLY_SCAN_LIMIT - nextUsed),
+    resetsAt: reset.toISOString(),
   };
-  return {
-    record,
-    allowance,
-    metadata: {
-      [ACCOUNT_HISTORY_KEY]: nextHistory,
-      [ACCOUNT_USAGE_KEY]: nextUses,
-    },
-  };
+  return { error: null, saved: { record, allowance } };
 }
 
-export function hideRegisteredScan(user: User, id: string) {
-  return {
-    [ACCOUNT_HISTORY_KEY]: savedHistory(user).filter((entry) => entry.id !== id),
-  };
+export async function hideRegisteredScan(supabase: SupabaseClient, userId: string, id: string) {
+  return supabase
+    .from("scan_usage")
+    .update({ hidden_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", userId)
+    .eq("status", "succeeded");
 }
 
-export function clearRegisteredHistory() {
-  return { [ACCOUNT_HISTORY_KEY]: [] };
+export async function clearRegisteredHistory(supabase: SupabaseClient, userId: string) {
+  return supabase
+    .from("scan_usage")
+    .update({ hidden_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("status", "succeeded")
+    .is("hidden_at", null);
 }

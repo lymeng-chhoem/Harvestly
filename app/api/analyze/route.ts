@@ -34,8 +34,10 @@ export async function POST(request: Request) {
 
   const { supabase, user } = await getAuthenticatedUser();
 
-  if (user) {
-    const allowance = registeredScanState(user).allowance;
+  if (supabase && user) {
+    const { state, error } = await registeredScanState(supabase, user.id);
+    if (error || !state) return Response.json({ error: "service" }, { status: 502 });
+    const allowance = state.allowance;
     if (allowance.remaining === 0) {
       return Response.json({ error: "limit", allowance }, { status: 429 });
     }
@@ -65,9 +67,9 @@ export async function POST(request: Request) {
     }
 
     if (supabase && user) {
-      const saved = addRegisteredScan(user, analysis);
-      const { error } = await supabase.auth.updateUser({ data: saved.metadata });
-      if (error) return Response.json({ error: "service" }, { status: 502 });
+      const { error, saved } = await addRegisteredScan(supabase, user.id, analysis);
+      if (error || !saved) return Response.json({ error: "service" }, { status: 502 });
+      if (!saved.record) return Response.json({ error: "limit", allowance: saved.allowance }, { status: 429 });
       return Response.json({
         record: saved.record,
         allowance: saved.allowance,

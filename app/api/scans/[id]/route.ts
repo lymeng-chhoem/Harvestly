@@ -6,7 +6,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { supabase, user } = await getAuthenticatedUser();
   if (!supabase || !user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-  const { error } = await supabase.auth.updateUser({ data: hideRegisteredScan(user, id) });
+  const { error } = await hideRegisteredScan(supabase, user.id, id);
 
   if (error) return Response.json({ error: "service" }, { status: 502 });
   return Response.json({ ok: true });

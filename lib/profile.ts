@@ -1,17 +1,13 @@
 export const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+export const PROFILE_AVATAR_BUCKET = "profile-avatars";
+export const PROFILE_AVATAR_MAX_SIZE = 2 * 1024 * 1024;
+export const PROFILE_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export type AccountProfile = {
   username: string | null;
   avatarUrl: string | null;
   profileComplete: boolean;
 };
-
-type AuthUser = {
-  user_metadata?: {
-    harvestly_username?: unknown;
-    avatar_url?: unknown;
-  } | null;
-} | null;
 
 type ProfileRow = {
   username?: unknown;
@@ -26,29 +22,21 @@ export function isValidUsername(value: string) {
   return USERNAME_PATTERN.test(value);
 }
 
+export function profileAvatarExtension(type: string) {
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  return null;
+}
+
 export function profileSetupPath(destination: string) {
   return `/complete-profile?next=${encodeURIComponent(destination)}`;
 }
 
-export function readAccountProfile(user: AuthUser): AccountProfile {
-  const metadata = user?.user_metadata;
-  const username = typeof metadata?.harvestly_username === "string" ? normalizeUsername(metadata.harvestly_username) : null;
-  return {
-    username: username && isValidUsername(username) ? username : null,
-    avatarUrl: typeof metadata?.avatar_url === "string" ? metadata.avatar_url : null,
-    profileComplete: Boolean(username && isValidUsername(username)),
-  };
-}
-
-export function readDatabaseAccountProfile(row: ProfileRow, user?: AuthUser): AccountProfile {
+export function readDatabaseAccountProfile(row: ProfileRow): AccountProfile {
   const databaseUsername = typeof row?.username === "string" ? normalizeUsername(row.username) : null;
-  const metadataUsername = typeof user?.user_metadata?.harvestly_username === "string"
-    ? normalizeUsername(user.user_metadata.harvestly_username)
-    : null;
-  const username = databaseUsername && isValidUsername(databaseUsername) ? databaseUsername : metadataUsername;
-  const avatarUrl = typeof row?.avatar_url === "string"
-    ? row.avatar_url
-    : (typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null);
+  const username = databaseUsername && isValidUsername(databaseUsername) ? databaseUsername : null;
+  const avatarUrl = typeof row?.avatar_url === "string" ? row.avatar_url : null;
 
   return {
     username: username && isValidUsername(username) ? username : null,

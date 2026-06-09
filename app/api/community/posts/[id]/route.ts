@@ -65,7 +65,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { supabase, user } = await getAuthenticatedUser();
   if (!supabase || !user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase.rpc("delete_community_post", { p_post_id: id });
+  const hiddenAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("community_posts")
+    .update({ hidden_at: hiddenAt, hidden_by: user.id })
+    .eq("id", id)
+    .eq("author_id", user.id)
+    .is("hidden_at", null)
+    .select("photo_path")
+    .maybeSingle();
 
   if (error) return communityError("delete post", error);
   if (!data) return Response.json({ error: "not_found" }, { status: 404 });

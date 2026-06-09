@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">Balanced Paddy NPK 16-16-8</title>
+  <desc id="desc">Illustrated fertilizer sack for paddy rice nutrition.</desc>
+  <rect width="480" height="300" fill="#d9c67a"/>
+  <rect x="39" y="29" width="402" height="242" rx="26" fill="#273f2b"/>
+  <path d="M137 43h206l29 234H108Z" fill="#f0dc96"/>
+  <path d="M128 79h224v82H128Z" fill="#b46c2e"/>
+  <text x="240" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#fff3c4">Balanced Paddy</text>
+  <text x="240" y="149" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#fff3c4">NPK</text>
+  <text x="240" y="214" text-anchor="middle" font-family="Arial, sans-serif" font-size="58" font-weight="800" fill="#273f2b">16-16-8</text>
+  <path d="M151 246h198" stroke="#4b7a38" stroke-width="10" stroke-linecap="round"/>
+  <path d="M180 244c23-45 48-58 75-39 23 16 42 19 63 4-16 37-41 53-75 49-22-3-42-10-63-14Z" fill="#4b7a38"/>
+</svg>

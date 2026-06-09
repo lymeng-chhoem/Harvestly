@@ -3,26 +3,24 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  createStoredScanRecord,
   type Language,
   type StoredScanRecord,
 } from "@/lib/harvestly-content";
 import {
-  prependScanRecord,
   parseScanHistory,
-  readScanHistory,
   saveScanHistory,
   SCAN_HISTORY_STORAGE_KEY,
   type HistoryFilter,
 } from "@/lib/scan-history";
 import {
-  type AnalyzeSuccessResponse,
   type AuthenticatedScanState,
   type ScanAllowance,
   readAnonymousAllowance,
-  spendAnonymousScan,
 } from "@/lib/scan-usage";
-import { profileSetupPath, readDatabaseAccountProfile } from "@/lib/profile";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { profileSetupPath } from "@/lib/profile";
+import { createFirebaseAuth } from "@/lib/firebase/client";
+import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 
 type UploadError = "type" | "size" | null;
 export type AnalysisStatus = "idle" | "analyzing" | "result" | "error";
@@ -63,6 +61,7 @@ type ProductContextValue = {
 const LANGUAGE_STORAGE_KEY = "harvestly-language";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
+const DEMO_ANALYSIS_DELAY_MS = 900;
 const ProductContext = createContext<ProductContextValue | null>(null);
 const PROFILE_GATE_EXEMPT_PATHS = new Set([
   "/complete-profile",
@@ -72,6 +71,7 @@ const PROFILE_GATE_EXEMPT_PATHS = new Set([
   "/signup",
   "/forgot-password",
   "/update-password",
+  "/settings",
 ]);
 const languageListeners = new Set<() => void>();
 const historyListeners = new Set<() => void>();
@@ -115,24 +115,18 @@ function notifyHistoryChanged() {
   historyListeners.forEach((listener) => listener());
 }
 
-function responseErrorCode(payload: unknown): Exclude<AnalysisError, null> {
-  if (!payload || typeof payload !== "object" || !("error" in payload)) return "service";
-  const error = (payload as { error?: unknown }).error;
-  if (
-    error === "configuration" ||
-    error === "network" ||
-    error === "timeout" ||
-    error === "invalid_response" ||
-    error === "limit"
-  ) {
-    return error;
-  }
-  return "service";
-}
-
-function isAnalyzeSuccessResponse(value: unknown): value is AnalyzeSuccessResponse {
-  if (!value || typeof value !== "object" || !("record" in value)) return false;
-  return parseScanHistory(JSON.stringify([(value as { record: unknown }).record])).length === 1;
+function waitForDemoAnalysis(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Analysis cancelled", "AbortError"));
+      return;
+    }
+    const timeoutId = window.setTimeout(resolve, DEMO_ANALYSIS_DELAY_MS);
+    signal.addEventListener("abort", () => {
+      window.clearTimeout(timeoutId);
+      reject(new DOMException("Analysis cancelled", "AbortError"));
+    }, { once: true });
+  });
 }
 
 export function ProductProvider({ children }: { children: ReactNode }) {
@@ -162,34 +156,31 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const historyRecords = authStatus === "authenticated" ? remoteHistoryRecords : localHistoryRecords;
 
   const refreshProfile = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
+    try {
+      const response = await fetch("/api/me", { cache: "no-store" });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok || !payload || typeof payload !== "object") {
+        setUsername(null);
+        setAvatarUrl(null);
+        setProfileStatus(response.status === 401 ? "guest" : "incomplete");
+        return;
+      }
+      const profile = "profile" in payload && payload.profile && typeof payload.profile === "object"
+        ? payload.profile as { username?: unknown; avatarUrl?: unknown; profileComplete?: unknown }
+        : null;
+      setUsername(typeof profile?.username === "string" ? profile.username : null);
+      setAvatarUrl(typeof profile?.avatarUrl === "string" ? profile.avatarUrl : null);
+      setProfileStatus(profile?.profileComplete ? "complete" : "incomplete");
+    } catch {
       setUsername(null);
       setAvatarUrl(null);
-      setProfileStatus("guest");
-      return;
+      setProfileStatus("incomplete");
     }
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      setUsername(null);
-      setAvatarUrl(null);
-      setProfileStatus("guest");
-      return;
-    }
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("username, avatar_url")
-      .eq("id", userData.user.id)
-      .maybeSingle();
-    const profile = readDatabaseAccountProfile(profileData, userData.user);
-    setUsername(profile.username);
-    setAvatarUrl(profile.avatarUrl);
-    setProfileStatus(profile.profileComplete ? "complete" : "incomplete");
   }, []);
 
   useEffect(() => {
     let active = true;
-    const supabase = createSupabaseBrowserClient();
+    const auth = createFirebaseAuth();
 
     async function loadRegisteredState() {
       try {
@@ -215,7 +206,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     }
 
     async function applySession() {
-      if (!supabase) {
+      if (!auth) {
         if (!active) return;
         setAuthConfigured(false);
         setAuthStatus("guest");
@@ -226,11 +217,28 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         setAllowance(readAnonymousAllowance());
         return;
       }
-      const { data } = await supabase.auth.getUser();
+      const firebaseUser = auth.currentUser;
       if (!active) return;
-      if (data.user) {
+      if (firebaseUser?.emailVerified) {
+        const idToken = await firebaseUser.getIdToken();
+        const sessionResponse = await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+        if (!active) return;
+        if (!sessionResponse.ok) {
+          setAuthStatus("guest");
+          setAuthEmail(null);
+          setUsername(null);
+          setAvatarUrl(null);
+          setProfileStatus("guest");
+          setRemoteHistoryRecords([]);
+          setAllowance(readAnonymousAllowance());
+          return;
+        }
         setAuthStatus("authenticated");
-        setAuthEmail(data.user.email ?? null);
+        setAuthEmail(firebaseUser.email ?? null);
         setAllowance(null);
         setHistorySaveError(false);
         setProfileStatus("loading");
@@ -249,12 +257,12 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     }
 
     void applySession();
-    const subscription = supabase?.auth.onAuthStateChange(() => {
+    const unsubscribe = auth ? onAuthStateChanged(auth, () => {
       void applySession();
-    });
+    }) : undefined;
     return () => {
       active = false;
-      subscription?.data.subscription.unsubscribe();
+      unsubscribe?.();
       activeRequest.current?.abort();
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     };
@@ -314,11 +322,6 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   async function analyze() {
     if (!selectedFile || authStatus === "loading") return;
-    if (allowance?.remaining === 0) {
-      setAnalysisError("limit");
-      setAnalysisStatus("error");
-      return;
-    }
 
     activeRequest.current?.abort();
     const controller = new AbortController();
@@ -328,38 +331,16 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setResult(null);
     setHistorySaveError(false);
 
-    const data = new FormData();
-    data.append("image", selectedFile, selectedFile.name);
-
     try {
-      const response = await fetch("/api/analyze", { method: "POST", body: data, signal: controller.signal });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        if (payload && typeof payload === "object" && "allowance" in payload) {
-          setAllowance((payload as { allowance: ScanAllowance }).allowance);
-        }
-        setAnalysisError(responseErrorCode(payload));
-        setAnalysisStatus("error");
-        return;
-      }
-      if (!isAnalyzeSuccessResponse(payload)) {
-        setAnalysisError("invalid_response");
-        setAnalysisStatus("error");
-        return;
-      }
-
-      const record = payload.record;
+      await waitForDemoAnalysis(controller.signal);
+      const record = createStoredScanRecord({
+        cropId: "rice",
+        conditionCode: "rice_blast",
+        confidence: 0.89,
+        risk: "high",
+      });
       setResult(record);
       setAnalysisStatus("result");
-      if (authStatus === "authenticated") {
-        setRemoteHistoryRecords((records) => prependScanRecord(records, record));
-        if (payload.allowance) setAllowance(payload.allowance);
-      } else {
-        const nextRecords = prependScanRecord(readScanHistory(), record);
-        setAllowance(spendAnonymousScan());
-        if (saveScanHistory(nextRecords)) notifyHistoryChanged();
-        else setHistorySaveError(true);
-      }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       setAnalysisError("network");
@@ -409,9 +390,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    const auth = createFirebaseAuth();
+    if (auth) await firebaseSignOut(auth);
+    await fetch("/api/auth/signout", { method: "POST" }).catch(() => null);
     setAuthStatus("guest");
     setAuthEmail(null);
     setUsername(null);

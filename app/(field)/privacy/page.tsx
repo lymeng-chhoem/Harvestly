@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <article className="parchment-panel legal-document">
         <h2>Information we process</h2>
         <p>
-          When you create an account or sign in through Google or Facebook, Harvestly uses Supabase
+          When you create an account or sign in through Google or Facebook, Harvestly uses Firebase
           Authentication to manage your account and session. Your profile may include your email
           address, display name, and profile image supplied by the authentication provider.
         </p>

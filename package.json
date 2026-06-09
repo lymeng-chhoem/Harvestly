@@ -6,12 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "auth:check": "node scripts/check-auth-migration-readiness.mjs",
+    "auth:migrate": "node scripts/run-auth-migration.mjs",
+    "auth:migrate:supabase": "node scripts/apply-supabase-firebase-migration.mjs",
+    "auth:import-users": "node scripts/import-supabase-users-to-firebase.mjs"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
+    "firebase": "^12.14.0",
+    "firebase-admin": "^13.10.0",
     "next": "16.2.6",
+    "pg": "^8.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

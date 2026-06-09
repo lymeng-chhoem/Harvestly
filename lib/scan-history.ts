@@ -1,4 +1,4 @@
-import type { LocalizedText, RiskLevel, StoredScanRecord } from "@/lib/harvestly-content";
+import type { LocalizedText, ProductRecommendation, RiskLevel, StoredScanRecord } from "@/lib/harvestly-content";
 
 export const SCAN_HISTORY_STORAGE_KEY = "harvestly-scan-history:v1";
 export const MAX_STORED_SCANS = 30;
@@ -12,6 +12,20 @@ function isLocalizedText(value: unknown): value is LocalizedText {
 
 function isRisk(value: unknown): value is RiskLevel {
   return value === "high" || value === "medium" || value === "low";
+}
+
+function isProductRecommendation(value: unknown): value is ProductRecommendation {
+  if (!value || typeof value !== "object") return false;
+  const product = value as Partial<ProductRecommendation>;
+  return (
+    typeof product.id === "string" &&
+    isLocalizedText(product.name) &&
+    isLocalizedText(product.description) &&
+    typeof product.imageSrc === "string" &&
+    typeof product.priceRiel === "number" &&
+    Number.isFinite(product.priceRiel) &&
+    product.priceRiel > 0
+  );
 }
 
 function isStoredScanRecord(value: unknown): value is StoredScanRecord {
@@ -32,6 +46,12 @@ function isStoredScanRecord(value: unknown): value is StoredScanRecord {
     isLocalizedText(record.summary) &&
     Array.isArray(record.actions) &&
     record.actions.every(isLocalizedText) &&
+    (record.details === undefined || isLocalizedText(record.details)) &&
+    (record.treatment === undefined || (Array.isArray(record.treatment) && record.treatment.every(isLocalizedText))) &&
+    (
+      record.recommendedProducts === undefined ||
+      (Array.isArray(record.recommendedProducts) && record.recommendedProducts.every(isProductRecommendation))
+    ) &&
     typeof record.unrecognizedCondition === "boolean"
   );
 }

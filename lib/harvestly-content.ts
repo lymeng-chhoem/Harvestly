@@ -23,6 +23,13 @@ export type ModelAnalysisResponse = {
   confidence: number;
   risk: RiskLevel;
 };
+export type ProductRecommendation = {
+  id: string;
+  name: LocalizedText;
+  description: LocalizedText;
+  imageSrc: string;
+  priceRiel: number;
+};
 export type StoredScanRecord = ModelAnalysisResponse & {
   id: string;
   createdAt: string;
@@ -30,6 +37,9 @@ export type StoredScanRecord = ModelAnalysisResponse & {
   finding: LocalizedText;
   summary: LocalizedText;
   actions: LocalizedText[];
+  details?: LocalizedText;
+  treatment?: LocalizedText[];
+  recommendedProducts?: ProductRecommendation[];
   unrecognizedCondition: boolean;
 };
 
@@ -126,7 +136,7 @@ export const photoTips: PhotoTip[] = [
   },
 ];
 
-type ConditionContent = Pick<StoredScanRecord, "finding" | "summary" | "actions">;
+type ConditionContent = Pick<StoredScanRecord, "finding" | "summary" | "actions" | "details" | "treatment" | "recommendedProducts">;
 
 const cropLabels: Record<CropId, LocalizedText> = {
   rice: { km: "ស្រូវ", en: "Rice" },
@@ -152,6 +162,98 @@ const conditionCatalog: Record<string, ConditionContent> = {
   rice_blast: {
     finding: { km: "អាចជាជំងឺប្លាស្តស្រូវ", en: "Likely Rice Blast" },
     summary: { km: "ស្លឹកអាចមានស្នាមរាងពេជ្រ ដែលត្រូវពិនិត្យបន្ថែមលើដំណាំជិតខាង។", en: "The leaf may show diamond-shaped lesions that require checking nearby plants." },
+    details: {
+      km: "ប្លាស្តស្រូវជាជំងឺផ្សិតដែលរាលដាលលឿនពេលអាកាសសើម ឬវាលមានខ្យល់ចេញចូលតិច។ វាបង្កស្នាមរាងពេជ្រលើស្លឹក ហើយអាចប៉ះពាល់ដល់កួរនិងទិន្នផល ប្រសិនបើមិនពិនិត្យ និងគ្រប់គ្រងឆាប់ៗ។",
+      en: "Rice Blast is a fungal rice disease that can spread quickly in humid weather or fields with poor airflow. It often creates diamond-shaped leaf lesions and can affect panicles and yield if the field is not checked and managed early.",
+    },
+    treatment: [
+      {
+        km: "បញ្ជាក់ជាមួយមន្ត្រីកសិកម្ម ឬអ្នកជំនាញក្នុងតំបន់ មុនពេលប្រើថ្នាំបាញ់។",
+        en: "Confirm the diagnosis with an agricultural officer or local expert before spraying.",
+      },
+      {
+        km: "កាត់បន្ថយការប្រើជីអាសូតច្រើនពេក ព្រោះស្លឹកទន់ងាយឲ្យជំងឺរាលដាល។",
+        en: "Avoid excess nitrogen because soft leaf growth can make disease spread faster.",
+      },
+      {
+        km: "ធ្វើឲ្យវាលមានខ្យល់ចេញចូលល្អ និងគ្រប់គ្រងទឹកកុំឲ្យសើមជាប់យូរ។",
+        en: "Improve field airflow and water management so the crop does not stay wet for long periods.",
+      },
+      {
+        km: "យកផ្នែកដំណាំដែលឆ្លងខ្លាំងចេញពីវាល ហើយកុំទុកសំណល់ជំងឺនៅជិតស្រូវសុខភាពល្អ។",
+        en: "Remove heavily infected plant matter and keep diseased residue away from healthy rice.",
+      },
+      {
+        km: "ប្រើថ្នាំសម្លាប់ផ្សិតសម្រាប់ប្លាស្តស្រូវតែបន្ទាប់ពីបានបញ្ជាក់ ហើយអនុវត្តតាមស្លាកផលិតផល។",
+        en: "Use a labeled rice blast fungicide only after confirmation, following the product label.",
+      },
+      {
+        km: "ពិនិត្យវាលម្តងទៀតក្រោយ ៥-៧ ថ្ងៃ ដើម្បីមើលថារីករាលដាលបន្តឬទេ។",
+        en: "Recheck the field after 5-7 days to see whether symptoms are still spreading.",
+      },
+    ],
+    recommendedProducts: [
+      {
+        id: "khmer-crop-aquaponic",
+        name: { km: "Khmer Crop 2-in-1 Aquaponic Nutrient", en: "Khmer Crop 2-in-1 Aquaponic Nutrient" },
+        description: {
+          km: "ជីបំប៉នពី fish emulsion និងរុក្ខជាតិ សម្រាប់ជួយស្តារស្លឹកស្រូវក្រោយមានសម្ពាធជំងឺ។",
+          en: "Fish emulsion and botanical nutrient support for rice leaf recovery after disease stress.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_1avrrp1avrrp1avr.png",
+        priceRiel: 58000,
+      },
+      {
+        id: "mekong-vital-agro-serum",
+        name: { km: "Mekong Vital Agro Disease Shield", en: "Mekong Vital Agro Disease Shield" },
+        description: {
+          km: "សេរ៉ូម bio-nutrient សម្រាប់គាំទ្រការពារស្លឹក និងកាត់បន្ថយការរាលដាលរោគសញ្ញាដំបូង។",
+          en: "Bio-nutrient serum that supports leaf defense and early symptom control.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_rd8ww7rd8ww7rd8w.png",
+        priceRiel: 48000,
+      },
+      {
+        id: "green-phnom-restorative",
+        name: { km: "Green Phnom Bio-Restorative Fertilizer", en: "Green Phnom Bio-Restorative Fertilizer" },
+        description: {
+          km: "ជីស្តារដំណាំ និងជំនួយការពារផ្សិត សម្រាប់ស្រូវដែលស្លឹកខ្សោយក្រោយជំងឺ។",
+          en: "Restorative fertilizer and fungal-defense support for weakened rice leaves.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_f57omzf57omzf57o.png",
+        priceRiel: 52000,
+      },
+      {
+        id: "mekong-vital-organic-control",
+        name: { km: "Mekong Vital Organic Disease Control", en: "Mekong Vital Organic Disease Control" },
+        description: {
+          km: "ផលិតផល 2-in-1 សម្រាប់បំប៉នស្រូវ និងគាំទ្រការគ្រប់គ្រងជំងឺពេលមានហានិភ័យប្លាស្ត។",
+          en: "2-in-1 nutrition and disease-control support for rice under blast pressure.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_8rob248rob248rob.png",
+        priceRiel: 62000,
+      },
+      {
+        id: "phnom-crop-defense-booster",
+        name: { km: "Phnom Crop Natural Defense Booster", en: "Phnom Crop Natural Defense Booster" },
+        description: {
+          km: "ជីបំប៉នធម្មជាតិ សម្រាប់ជួយដំណាំខ្សោយឲ្យរឹងមាំ មុននិងក្រោយការគ្រប់គ្រងជំងឺ។",
+          en: "Natural crop defense and fertility booster for weak plants before and after treatment.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_dck3cdck3cdck3cd.png",
+        priceRiel: 39000,
+      },
+      {
+        id: "kromor-earth-organic",
+        name: { km: "Kromor Earth Organic 2-in-1", en: "Kromor Earth Organic 2-in-1" },
+        description: {
+          km: "ជីសរីរាង្គ 2-in-1 សម្រាប់បំប៉នស្រូវ និងគាំទ្រការពារពេលមានសម្ពាធជំងឺស្លឹក។",
+          en: "Organic 2-in-1 crop nutrition and protection support during leaf disease pressure.",
+        },
+        imageSrc: "/images/demo-products/Gemini_Generated_Image_9ped869ped869ped.png",
+        priceRiel: 44000,
+      },
+    ],
     actions: [
       sharedSafetyAction,
       { km: "ពិនិត្យស្លឹក និងកួរនៅជិតខាងថាមានស្នាមដូចគ្នាឬទេ។", en: "Check nearby leaves and panicles for similar markings." },

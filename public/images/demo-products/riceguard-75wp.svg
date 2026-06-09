@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">RiceGuard 75WP Fungicide</title>
+  <desc id="desc">Illustrated product pouch for rice blast fungicide.</desc>
+  <rect width="480" height="300" fill="#d9c67a"/>
+  <rect x="38" y="28" width="404" height="244" rx="26" fill="#273f2b"/>
+  <path d="M87 72h266c30 0 55 25 55 55v145H87Z" fill="#f0dc96"/>
+  <rect x="87" y="72" width="321" height="74" rx="18" fill="#8e3f22"/>
+  <text x="240" y="116" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#fff3c4">RiceGuard</text>
+  <text x="240" y="167" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" font-weight="800" fill="#273f2b">75WP</text>
+  <text x="240" y="204" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#8e3f22">FUNGICIDE</text>
+  <path d="M144 242c36-41 68-57 96-49 29 8 58-3 88-31-15 50-43 78-84 82-38 4-65 6-100-2Z" fill="#4d7a37"/>
+  <path d="M166 235c51-14 95-25 164-77" fill="none" stroke="#f8edc8" stroke-width="5" stroke-linecap="round"/>
+</svg>

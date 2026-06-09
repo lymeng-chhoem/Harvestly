@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">Field Spray Kit Refill</title>
+  <desc id="desc">Illustrated field safety spray kit with gloves, mask, and cup.</desc>
+  <rect width="480" height="300" fill="#d9c67a"/>
+  <rect x="43" y="30" width="394" height="240" rx="26" fill="#2f4d3b"/>
+  <rect x="82" y="84" width="176" height="150" rx="20" fill="#f0dc96"/>
+  <rect x="279" y="74" width="92" height="169" rx="19" fill="#b56531"/>
+  <path d="M305 52h39v35h-39Z" fill="#f0dc96"/>
+  <path d="M114 121c27-22 85-22 112 0v49c-31 21-81 21-112 0Z" fill="#315f4b"/>
+  <path d="M126 151h87" stroke="#fff3c4" stroke-width="7" stroke-linecap="round"/>
+  <path d="M102 216c19-39 43-49 70-30 25 18 50 13 75-10-11 41-34 63-68 66-26 2-53-8-77-26Z" fill="#4b7a38"/>
+  <text x="170" y="111" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="800" fill="#2f4d3b">SAFE KIT</text>
+  <text x="325" y="151" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="800" fill="#fff3c4">SPRAY</text>
+  <text x="325" y="181" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#fff3c4">REFILL</text>
+</svg>

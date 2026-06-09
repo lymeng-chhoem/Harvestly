@@ -199,7 +199,7 @@ export async function GET(request: Request) {
   return Response.json({
     viewerId: user.id,
     posts: buildCommunityFeed(user.id, visiblePostRows, visibleCommentRows, profileRows.data ?? [], reportRows.data ?? [], photoUrls),
-    scanOptions: scanOptionsForUser(user),
+    scanOptions: await scanOptionsForUser(supabase, user.id),
     query: search,
   });
 }
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
   }
 
   const scanRecordId = readString(payload.scanRecordId);
-  const { scan, error: scanError } = pickUserScanShare(user, scanRecordId);
+  const { scan, error: scanError } = await pickUserScanShare(supabase, user.id, scanRecordId);
   if (scanError) return Response.json({ error: scanError }, { status: 400 });
 
   const photo = payload.photo;

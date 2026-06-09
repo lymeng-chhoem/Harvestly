@@ -36,12 +36,12 @@ typography:
     fontWeight: 400
     lineHeight: 1.65
   body-latin:
-    fontFamily: "Poppins, sans-serif"
+    fontFamily: "Kantumruy Pro, sans-serif"
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.55
   label:
-    fontFamily: "Poppins, sans-serif"
+    fontFamily: "Kantumruy Pro, sans-serif"
     fontSize: "15px"
     fontWeight: 600
     lineHeight: 1.25
@@ -128,8 +128,8 @@ The palette is rice-field green and parchment-warm, with antique gold signaling 
 ## Typography
 
 **Display Font:** Kantumruy Pro (with sans-serif fallback)  
-**Body Font:** Kantumruy Pro for Khmer; Poppins for opted-in English (with sans-serif fallback)  
-**Label Font:** Poppins for Latin controls; Kantumruy Pro for Khmer controls
+**Body Font:** Kantumruy Pro for Khmer and English (with sans-serif fallback)  
+**Label Font:** Kantumruy Pro for Khmer and Latin controls
 
 **Character:** Khmer copy must feel native, sturdy, and calm under pressure. English is a support mode, not a second visual voice competing on every screen.
 

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { confidenceText, localize, riskText } from "@/lib/harvestly-content";
+import { confidenceText, localize, riskText, type ProductRecommendation, type Language } from "@/lib/harvestly-content";
 import { useProduct, type AnalysisError } from "../state/ProductProvider";
 
 const text = {
@@ -27,6 +27,15 @@ const text = {
     en: "This result is guidance only. Confirm the issue with an agricultural officer before applying treatment.",
   },
   next: { km: "ជំហានបន្ទាប់", en: "Next actions" },
+  details: { km: "ព័ត៌មានលម្អិតអំពីជំងឺ", en: "Disease details" },
+  treatment: { km: "ការព្យាបាលដែលណែនាំ", en: "Suggested treatment" },
+  products: { km: "ផលិតផលសមស្រប", en: "Matched products" },
+  productsIntro: {
+    km: "ផលិតផលសាកល្បងសម្រាប់ទីផ្សារកម្ពុជា តម្លៃមិនលើស ៨០,០០០ រៀល។",
+    en: "Demo products priced for Cambodia, each under 80,000 riels.",
+  },
+  buyNow: { km: "ទិញឥឡូវនេះ", en: "Buy Now" },
+  productImage: { km: "រូបផលិតផល", en: "Product image" },
   saveError: {
     km: "លទ្ធផលបានបង្ហាញ ប៉ុន្តែមិនអាចរក្សាទុកក្នុងប្រវត្តិនៅលើឧបករណ៍នេះបានទេ។",
     en: "Result shown, but it could not be saved to your history.",
@@ -64,6 +73,38 @@ const text = {
     },
   },
 };
+
+function productPrice(priceRiel: number, language: Language) {
+  return new Intl.NumberFormat(language === "km" ? "km-KH" : "en-US").format(priceRiel) + " KHR";
+}
+
+function ProductImage({ product, language }: { product: ProductRecommendation; language: Language }) {
+  const [failed, setFailed] = useState(false);
+  const productName = localize(product.name, language);
+  const fallbackText = productName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className={`product-image ${failed ? "missing" : ""}`}>
+      <span aria-hidden="true">{fallbackText || localize(text.productImage, language)}</span>
+      {!failed && (
+        <Image
+          src={product.imageSrc}
+          alt={productName}
+          fill
+          sizes="240px"
+          unoptimized
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
+  );
+}
 
 export function ScanUploader({ home = false, className = "" }: { home?: boolean; className?: string }) {
   const router = useRouter();
@@ -211,21 +252,73 @@ export function ScanUploader({ home = false, className = "" }: { home?: boolean;
       )}
       {!home && result && analysisStatus === "result" && (
         <article className="diagnosis-result" aria-live="polite">
-          <div className="result-heading">
-            <div>
-              <small>{localize(text.likely, language)}</small>
-              <h3>{localize(result.finding, language)}</h3>
+          <div className="result-diagnosis-panel">
+            <div className="result-heading">
+              <div>
+                <small>{localize(text.likely, language)}</small>
+                <h3>{localize(result.finding, language)}</h3>
+              </div>
+              <span className={`risk-chip ${result.risk}`}>{riskText(result.risk, language)}</span>
             </div>
-            <span className={`risk-chip ${result.risk}`}>{riskText(result.risk, language)}</span>
+            <div className="result-snapshot">
+              <span>{confidenceText(result.confidence, language)}</span>
+              <span>{localize(result.crop, language)}</span>
+            </div>
+            <p className="result-summary">{localize(result.summary, language)}</p>
           </div>
-          <p className="confidence">{confidenceText(result.confidence, language)}</p>
-          <p>{localize(result.summary, language)}</p>
-          <div className="disclosure" role="note">{localize(text.disclosure, language)}</div>
+
+          <div className="result-context-row">
+            {result.details && (
+              <section className="result-detail-block disease-detail-block">
+                <h4>{localize(text.details, language)}</h4>
+                <p>{localize(result.details, language)}</p>
+              </section>
+            )}
+            <div className="disclosure" role="note">{localize(text.disclosure, language)}</div>
+          </div>
+
           {historySaveError && <div className="history-save-error" role="status">{localize(text.saveError, language)}</div>}
-          <h4>{localize(text.next, language)}</h4>
-          <ol>
-            {result.actions.map((action) => <li key={action.en}>{localize(action, language)}</li>)}
-          </ol>
+
+          <div className="result-action-grid">
+            {result.treatment && result.treatment.length > 0 && (
+              <section className="result-detail-block treatment-block">
+                <h4>{localize(text.treatment, language)}</h4>
+                <ol>
+                  {result.treatment.map((step) => <li key={step.en}>{localize(step, language)}</li>)}
+                </ol>
+              </section>
+            )}
+            <section className="result-detail-block next-actions-block">
+              <h4>{localize(text.next, language)}</h4>
+              <ol>
+                {result.actions.map((action) => <li key={action.en}>{localize(action, language)}</li>)}
+              </ol>
+            </section>
+          </div>
+
+          {result.recommendedProducts && result.recommendedProducts.length > 0 && (
+            <section className="recommended-products" aria-label={localize(text.products, language)}>
+              <div className="recommended-products-head">
+                <h4>{localize(text.products, language)}</h4>
+                <p>{localize(text.productsIntro, language)}</p>
+              </div>
+              <div className="product-scroll" tabIndex={0}>
+                {result.recommendedProducts.map((product) => (
+                  <article className="product-card" key={product.id}>
+                    <ProductImage product={product} language={language} />
+                    <div className="product-copy">
+                      <h5>{localize(product.name, language)}</h5>
+                      <strong>{productPrice(product.priceRiel, language)}</strong>
+                      <p>{localize(product.description, language)}</p>
+                    </div>
+                    <button className="rust-button product-buy" type="button">
+                      {localize(text.buyNow, language)}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
           <button className="paper-button retry-button" type="button" onClick={analyze}>{localize(text.retry, language)}</button>
         </article>
       )}

@@ -1,8 +1,8 @@
-import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createStoredScanRecord, type CropId, type RiskLevel, type StoredScanRecord } from "@/lib/harvestly-content";
 import { registeredScanState } from "@/lib/account-scan-state";
-import { isValidUsername, normalizeUsername, readAccountProfile } from "@/lib/profile";
+import type { AppUser } from "@/lib/supabase/server";
+import { isValidUsername, normalizeUsername } from "@/lib/profile";
 
 export const COMMUNITY_POST_LIMIT = 30;
 export const COMMUNITY_SEARCH_LIMIT = 200;
@@ -270,13 +270,15 @@ export function scanShareFromPostRow(row: CommunityPostRow): CommunityScanShare 
   return scanShareFromRecord(record);
 }
 
-export function scanOptionsForUser(user: User) {
-  return registeredScanState(user).records.slice(0, 10).map(scanShareFromRecord);
+export async function scanOptionsForUser(supabase: SupabaseClient, userId: string) {
+  const { state } = await registeredScanState(supabase, userId);
+  return (state?.records ?? []).slice(0, 10).map(scanShareFromRecord);
 }
 
-export function pickUserScanShare(user: User, scanRecordId: string | null) {
+export async function pickUserScanShare(supabase: SupabaseClient, userId: string, scanRecordId: string | null) {
   if (!scanRecordId) return { scan: null, error: null };
-  const scan = scanOptionsForUser(user).find((option) => option.recordId === scanRecordId) ?? null;
+  const options = await scanOptionsForUser(supabase, userId);
+  const scan = options.find((option) => option.recordId === scanRecordId) ?? null;
   return scan ? { scan, error: null } : { scan: null, error: "invalid_scan" as const };
 }
 
@@ -284,7 +286,7 @@ export function hasValidCommunityUsername(profile?: ProfileRow) {
   return Boolean(profile?.username && isValidUsername(normalizeUsername(profile.username)));
 }
 
-export async function ensureCommunityProfile(supabase: SupabaseClient, user: User): Promise<{
+export async function ensureCommunityProfile(supabase: SupabaseClient, user: AppUser): Promise<{
   profile: CommunityAuthor | null;
   error: CommunityProfileError | null;
 }> {
@@ -305,35 +307,13 @@ export async function ensureCommunityProfile(supabase: SupabaseClient, user: Use
         id: user.id,
         username: databaseUsername,
         displayName: typeof data?.display_name === "string" ? data.display_name : null,
-        avatarUrl: typeof data?.avatar_url === "string" ? data.avatar_url : readAccountProfile(user).avatarUrl,
+        avatarUrl: typeof data?.avatar_url === "string" ? data.avatar_url : null,
       },
       error: null,
     };
   }
 
-  const metadataProfile = readAccountProfile(user);
-  if (!metadataProfile.username) {
-    return { profile: null, error: "profile_required" };
-  }
-
-  const { error: claimError } = await supabase.rpc("claim_harvestly_username", {
-    p_username: metadataProfile.username,
-  });
-
-  if (claimError) {
-    if (claimError.code === "23505") return { profile: null, error: "profile_required" };
-    return { profile: null, error: isDatabaseSetupError(claimError) ? "database_not_configured" : "service" };
-  }
-
-  return {
-    profile: {
-      id: user.id,
-      username: metadataProfile.username,
-      displayName: null,
-      avatarUrl: metadataProfile.avatarUrl,
-    },
-    error: null,
-  };
+  return { profile: null, error: "profile_required" };
 }
 
 export function buildCommunityFeed(
